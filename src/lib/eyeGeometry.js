@@ -1,19 +1,28 @@
-// Turns MediaPipe face points into a smooth upper-eyelid curve for each eye.
+// Turns MediaPipe face points into smooth eyelid curves for each eye,
+// plus a real-world scale (pixels per millimetre) taken from the iris.
 // Index numbers are fixed by MediaPipe's 478-point face mesh.
 
-// Listed from the INNER corner to the OUTER corner.
+// Average human iris diameter. Varies only ~±0.5 mm between adults,
+// which makes it a good ruler for converting lash lengths in mm to pixels.
+export const IRIS_DIAMETER_MM = 11.7;
+// Fallback when the iris isn't found: average eye opening width.
+const EYE_WIDTH_MM = 28;
+
+// Lids listed from the INNER corner to the OUTER corner.
 const EYES = {
   // The eye on the left side of the image (the person's right eye).
   imageLeft: {
     upper: [133, 173, 157, 158, 159, 160, 161, 246, 33],
     lower: [133, 155, 154, 153, 145, 144, 163, 7, 33],
     browLower: [55, 65, 52, 53, 46],
+    iris: [469, 470, 471, 472], // right, top, left, bottom edge of the iris
   },
   // The eye on the right side of the image (the person's left eye).
   imageRight: {
     upper: [362, 398, 384, 385, 386, 387, 388, 466, 263],
     lower: [362, 382, 381, 380, 374, 373, 390, 249, 263],
     browLower: [285, 295, 282, 283, 276],
+    iris: [474, 475, 476, 477],
   },
 };
 
@@ -22,6 +31,8 @@ export const DEBUG_INDICES = [
   ...EYES.imageLeft.lower,
   ...EYES.imageRight.upper,
   ...EYES.imageRight.lower,
+  ...EYES.imageLeft.iris,
+  ...EYES.imageRight.iris,
 ];
 
 const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });
@@ -38,7 +49,7 @@ function toPx(landmarks, idx, w, h) {
   return idx.map((i) => ({ x: landmarks[i].x * w, y: landmarks[i].y * h }));
 }
 
-// Smooth curve through the points (centripetal-free, uniform Catmull-Rom).
+// Smooth curve through the points (uniform Catmull-Rom).
 function catmullRom(points, stepsPerSegment = 24) {
   const out = [];
   const n = points.length;
@@ -100,8 +111,9 @@ export function buildEyeFromPoints(upper, lower) {
   const openness = Math.min(Math.max(lidGap / (width * 0.32), 0), 1);
 
   const lid = catmullRom(upper);
+  const lowerLid = catmullRom(lower);
 
-  // Direction that points away from the eye (up, towards the brow).
+  // Direction that points away from the eye (up for the upper lid, down for the lower lid).
   const awayFromEye = (p, tangent) => {
     let n = { x: -tangent.y, y: tangent.x };
     if (dot(n, sub(p, center)) < 0) n = mul(n, -1);
@@ -110,24 +122,63 @@ export function buildEyeFromPoints(upper, lower) {
 
   const sampleAt = (count, t0 = 0.03, t1 = 0.99) =>
     resample(lid, count, t0, t1).map((s) => ({ ...s, normal: awayFromEye(s, s.tangent) }));
+  const sampleLowerAt = (count, t0 = 0.12, t1 = 0.96) =>
+    resample(lowerLid, count, t0, t1).map((s) => ({ ...s, normal: awayFromEye(s, s.tangent) }));
 
   // "Up" for this eye (towards the brow). getEyes() replaces it with the face's own up.
   let up = { x: -outerDir.y, y: outerDir.x };
   if (dot(up, sub(upper[4], center)) < 0) up = mul(up, -1);
 
-  return { inner, outer, width, center, outerDir, openness, lid, sampleAt, upper, lower, up, browGap: Infinity };
+  return {
+    inner,
+    outer,
+    width,
+    center,
+    outerDir,
+    openness,
+    lid,
+    lowerLid,
+    sampleAt,
+    sampleLowerAt,
+    upper,
+    lower,
+    up,
+    browGap: Infinity,
+    pxPerMm: width / EYE_WIDTH_MM,
+    scaleSource: "eye-width",
+  };
 }
 
 /** Returns geometry for both eyes, or null if the points are missing. */
 export function getEyes(landmarks, w, h) {
   if (!landmarks || landmarks.length < 468) return null;
-  const eyes = [EYES.imageLeft, EYES.imageRight].map((def) => {
+  const defs = [EYES.imageLeft, EYES.imageRight];
+  const eyes = defs.map((def) => {
     const eye = buildEyeFromPoints(toPx(landmarks, def.upper, w, h), toPx(landmarks, def.lower, w, h));
     // Space between the upper lid and the brow, so long lashes never reach into the brow.
     const brow = toPx(landmarks, def.browLower, w, h);
     eye.browGap = Math.min(...brow.map((b) => Math.min(...eye.upper.slice(2, 7).map((u) => len(sub(b, u))))));
     return eye;
   });
+
+  // Real-world scale from the iris (both eyes averaged for stability).
+  if (landmarks.length >= 478) {
+    const diameters = defs.map((def) => {
+      const [r, t, l, b] = toPx(landmarks, def.iris, w, h);
+      return (len(sub(r, l)) + len(sub(t, b))) / 2;
+    });
+    const irisPx = (diameters[0] + diameters[1]) / 2;
+    const fallback = (eyes[0].pxPerMm + eyes[1].pxPerMm) / 2;
+    const fromIris = irisPx / IRIS_DIAMETER_MM;
+    // Ignore a clearly wrong reading (e.g. eyes nearly closed).
+    if (fromIris > fallback * 0.6 && fromIris < fallback * 1.6) {
+      eyes.forEach((e) => {
+        e.pxPerMm = fromIris;
+        e.scaleSource = "iris";
+      });
+    }
+  }
+
   // Face "up": perpendicular to the line between the two eyes, pointing to the brows.
   const across = norm(sub(eyes[1].center, eyes[0].center));
   let up = { x: across.y, y: -across.x };

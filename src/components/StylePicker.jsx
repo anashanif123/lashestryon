@@ -1,23 +1,21 @@
-import { useEffect, useRef } from "react";
-import { LASH_STYLES, DEFAULT_ADJUSTMENTS } from "../lib/lashStyles.js";
+import { useEffect, useRef, useState } from "react";
+import { CATEGORIES, DEFAULT_ADJUSTMENTS } from "../lib/lashStyles.js";
 import { syntheticEye } from "../lib/eyeGeometry.js";
 import { drawLashes } from "../lib/lashRenderer.js";
 
-// Small drawn eye showing each style, made with the same code as the try-on.
-function StyleThumb({ style }) {
+// Small drawn eye showing a style, made with the same code as the try-on.
+export function StyleThumb({ style, adj = DEFAULT_ADJUSTMENTS, width = 120, height = 64 }) {
   const ref = useRef(null);
   useEffect(() => {
     const canvas = ref.current;
     const dpr = window.devicePixelRatio || 1;
-    const w = 120;
-    const h = 64;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
     const ctx = canvas.getContext("2d");
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, w, h);
-    const eye = syntheticEye(w / 2, h * 0.68, 70);
-    // Eye shape
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    const eyeW = width * 0.56;
+    const eye = syntheticEye(width / 2, height * 0.7, eyeW);
     ctx.fillStyle = "#fff";
     ctx.strokeStyle = "rgba(60, 40, 50, 0.35)";
     ctx.lineWidth = 1;
@@ -27,40 +25,62 @@ function StyleThumb({ style }) {
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-    // Iris
+    const irisR = eyeW * 0.13;
     ctx.fillStyle = "#6b4b3e";
     ctx.beginPath();
-    ctx.arc(w / 2 + 2, h * 0.62, 9, 0, Math.PI * 2);
+    ctx.arc(width / 2 + 2, height * 0.64, irisR, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = "#1d1214";
     ctx.beginPath();
-    ctx.arc(w / 2 + 2, h * 0.62, 4, 0, Math.PI * 2);
+    ctx.arc(width / 2 + 2, height * 0.64, irisR * 0.45, 0, Math.PI * 2);
     ctx.fill();
-    drawLashes(ctx, [eye], style, DEFAULT_ADJUSTMENTS);
-  }, [style]);
-  return <canvas ref={ref} className="thumb-canvas" aria-hidden="true" />;
+    drawLashes(ctx, [eye], style, { ...adj, lower: false, density: Math.min(adj.density, 1) });
+  }, [style, adj, width, height]);
+  return <canvas ref={ref} className="thumb-canvas" style={{ width, height }} aria-hidden="true" />;
 }
 
-export default function StylePicker({ value, onChange, recommended = [] }) {
+export default function StylePicker({ styles, value, onChange, recommended = [] }) {
+  const [cat, setCat] = useState("all");
+  const cats = CATEGORIES.filter((c) => c.id === "all" || styles.some((s) => s.category === c.id));
+  const shown = cat === "all" ? styles : styles.filter((s) => s.category === cat);
+
   return (
-    <div className="style-grid" role="radiogroup" aria-label="Lash style">
-      {LASH_STYLES.map((style) => (
-        <button
-          key={style.id}
-          type="button"
-          role="radio"
-          aria-checked={value === style.id}
-          className={`style-card${value === style.id ? " is-active" : ""}`}
-          onClick={() => onChange(style.id)}
-        >
-          <StyleThumb style={style} />
-          <span className="style-name">
-            {style.name}
-            {recommended.includes(style.id) && <span className="badge">Suggested</span>}
-          </span>
-          <span className="style-blurb">{style.blurb}</span>
-        </button>
-      ))}
+    <div className="style-picker">
+      {cats.length > 2 && (
+        <div className="chip-row" role="tablist" aria-label="Style type">
+          {cats.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              role="tab"
+              aria-selected={cat === c.id}
+              className={`chip${cat === c.id ? " is-active" : ""}`}
+              onClick={() => setCat(c.id)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="style-grid" role="radiogroup" aria-label="Lash style">
+        {shown.map((style) => (
+          <button
+            key={style.id}
+            type="button"
+            role="radio"
+            aria-checked={value === style.id}
+            className={`style-card${value === style.id ? " is-active" : ""}`}
+            onClick={() => onChange(style.id)}
+          >
+            <StyleThumb style={style} />
+            <span className="style-name">
+              {style.name}
+              {recommended.includes(style.id) && <span className="badge">Suggested</span>}
+            </span>
+            <span className="style-blurb">{style.blurb}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

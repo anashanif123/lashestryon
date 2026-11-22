@@ -1,43 +1,89 @@
-const SLIDERS = [
-  { key: "length", label: "Length", min: 0.6, max: 1.5, step: 0.05 },
-  { key: "curl", label: "Curl", min: 0, max: 2, step: 0.05 },
-  { key: "density", label: "Fullness", min: 0.5, max: 1.6, step: 0.05 },
-  { key: "thickness", label: "Thickness", min: 0.5, max: 1.6, step: 0.05 },
-  { key: "darkness", label: "Darkness", min: 0.4, max: 1, step: 0.05 },
-];
+import { LASH_COLORS, TIP_COLORS } from "../lib/lashStyles.js";
 
-export default function Adjustments({ value, onChange, onReset }) {
+// Colour, fullness, darkness and extras.
+export default function Adjustments({ value, onChange }) {
+  const set = (patch) => onChange({ ...value, ...patch });
   return (
     <div className="adjustments">
-      {SLIDERS.map((s) => (
-        <label key={s.key} className="slider" htmlFor={`adj-${s.key}`}>
-          <span className="slider-head">
-            <span>{s.label}</span>
-            <span className="slider-value">{Math.round(value[s.key] * 100)}%</span>
-          </span>
-          <input
-            id={`adj-${s.key}`}
-            type="range"
-            min={s.min}
-            max={s.max}
-            step={s.step}
-            value={value[s.key]}
-            onChange={(e) => onChange({ ...value, [s.key]: Number(e.target.value) })}
-          />
-        </label>
-      ))}
-      <label className="check" htmlFor="adj-lashline">
+      <div className="field">
+        <span className="field-label">Colour</span>
+        <div className="swatch-row">
+          {LASH_COLORS.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              aria-label={c.label}
+              title={c.label}
+              className={`swatch${value.color === c.id ? " is-active" : ""}`}
+              style={{ background: `rgb(${c.rgb})` }}
+              onClick={() => set({ color: c.id })}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="field">
+        <span className="field-label">Coloured tips</span>
+        <div className="swatch-row">
+          {TIP_COLORS.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              aria-label={c.label}
+              title={c.label}
+              className={`swatch${value.tip === c.id ? " is-active" : ""}${c.rgb ? "" : " swatch-none"}`}
+              style={c.rgb ? { background: `linear-gradient(135deg, rgb(16,11,11) 45%, rgb(${c.rgb}) 46%)` } : undefined}
+              onClick={() => set({ tip: c.id })}
+            />
+          ))}
+        </div>
+      </div>
+
+      <label className="slider" htmlFor="adj-density">
+        <span className="slider-head">
+          <span>Fullness</span>
+          <span className="slider-value">{Math.round(value.density * 100)}%</span>
+        </span>
         <input
-          id="adj-lashline"
-          type="checkbox"
-          checked={value.lashLine}
-          onChange={(e) => onChange({ ...value, lashLine: e.target.checked })}
+          id="adj-density"
+          type="range"
+          min="0.5"
+          max="1.5"
+          step="0.05"
+          value={value.density}
+          onChange={(e) => set({ density: Number(e.target.value) })}
         />
-        <span>Lash line</span>
       </label>
-      <button type="button" className="link-btn" onClick={onReset}>
-        Reset adjustments
-      </button>
+      <label className="slider" htmlFor="adj-darkness">
+        <span className="slider-head">
+          <span>Darkness</span>
+          <span className="slider-value">{Math.round(value.darkness * 100)}%</span>
+        </span>
+        <input
+          id="adj-darkness"
+          type="range"
+          min="0.4"
+          max="1"
+          step="0.05"
+          value={value.darkness}
+          onChange={(e) => set({ darkness: Number(e.target.value) })}
+        />
+      </label>
+
+      <div className="check-row">
+        <label className="check" htmlFor="adj-lower">
+          <input id="adj-lower" type="checkbox" checked={value.lower} onChange={(e) => set({ lower: e.target.checked })} />
+          <span>Bottom lashes</span>
+        </label>
+        <label className="check" htmlFor="adj-lashline">
+          <input
+            id="adj-lashline"
+            type="checkbox"
+            checked={value.lashLine}
+            onChange={(e) => set({ lashLine: e.target.checked })}
+          />
+          <span>Lash line</span>
+        </label>
+      </div>
     </div>
   );
 }

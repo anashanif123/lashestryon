@@ -7,13 +7,21 @@ browser: no API key, no server, and photos never leave the device.
 ## Features
 
 - Photo upload (or drag and drop) and live camera with "Take photo"
-- 6 styles drawn strand by strand: Natural, Cat Eye, Doll Eye, Hybrid, Volume, Wispy
+- **Real millimetres**: lash length is scaled from the iris (about 11.7 mm across), so
+  "10 mm" looks like 10 mm on that client's eye
+- **12 styles** drawn strand by strand: Natural, Cat Eye, Doll Eye, Squirrel, Fox Eye,
+  Hybrid, Wispy, Volume, Mega Volume, Wet Look, Anime, Lash Lift
+- **Lash map editor** in the units lash artists use: 5 zones in mm (inner → outer),
+  curl J / B / C / CC / D, thickness 0.05–0.20 mm, Classic or 2D–8D fans
+- **Spec card** under the photo, e.g. `8-9-10-12-13 mm · C curl · 0.15 mm · Classic`
+- Colours (black, dark brown, brown), **coloured tips** (blue, purple, pink, red,
+  green) and optional **bottom lashes**
+- **Saved looks** (kept on the device), **Save image** with the lash map printed
+  under the photo, and **Share** on phones
 - Eye-shape reading (almond/round, tilt, spacing) with suggested styles
 - "See all styles": every style side by side on the client's own eyes
-- Zoom to face, before/after slider, save image, "Book this style" link
-- Sliders for length, curl, fullness, thickness and darkness
-- Lashes stay below the brows, get finer on small/low-resolution faces, and are
-  softened to match the photo
+- Zoom to face, before/after slider, warning when the face is too small in the photo
+- On phones the photo stays pinned at the top while the settings scroll
 
 ## Run it
 
@@ -59,32 +67,52 @@ Eye point numbers used (MediaPipe face mesh):
 | Left side of image | 133, 173, 157, 158, 159, 160, 161, 246, 33 | 133, 155, 154, 153, 145, 144, 163, 7, 33 |
 | Right side of image | 362, 398, 384, 385, 386, 387, 388, 466, 263 | 362, 382, 381, 380, 374, 373, 390, 249, 263 |
 
-Turn on **Show eye points** in the app to see them on the photo while tuning.
+Turn on **Eye points** in the app to see them on the photo while tuning.
 
-## Settings
+## Settings for each salon (no code needed)
 
-Edit `src/config.js`:
+Add these to the link. Every salon can get its own link from the same deployment:
 
-- `SALON_NAME` – shown in the header
-- `BOOKING_URL` – where "Book … lashes" goes; `?style=<name>` is added
-- `MEDIAPIPE_VERSION` – must match `@mediapipe/tasks-vision` in `package.json`
+```
+https://lashestryon.vercel.app/?salon=Glow%20Lash%20Studio&book=https://glow.example/book&accent=1f6f5c&styles=natural,cat-eye,hybrid,volume&style=hybrid&embed=1
+```
+
+| Param | What it does |
+|---|---|
+| `salon` | Name in the header and on saved images |
+| `book` | Booking link (http/https). Shows "Book this look"; `?style=<name>` is added. No button without it |
+| `accent` | Brand colour, 6-digit hex without `#` |
+| `styles` | Only show these styles (ids: natural, cat-eye, doll-eye, squirrel, fox-eye, hybrid, wispy, volume, mega-volume, wet-look, anime, lash-lift) |
+| `style` | Style selected at the start |
+| `embed=1` | Compact header, for putting the page inside the salon's website |
+
+Embed in a website:
+
+```html
+<iframe src="https://lashestryon.vercel.app/?salon=Glow%20Lash%20Studio&embed=1"
+        style="width:100%;height:900px;border:0" allow="camera"></iframe>
+```
+
+`MEDIAPIPE_VERSION` in `src/config.js` must match `@mediapipe/tasks-vision` in `package.json`.
 
 ## Files
 
 ```
 src/
   App.jsx                 screens, upload, camera loop, before/after, save image
-  config.js               salon name, booking link, MediaPipe URLs
+  config.js               salon link settings, MediaPipe URLs
   styles.css              all styling
   components/
     StylePicker.jsx       style cards with drawn previews
-    Adjustments.jsx       length, curl, fullness, thickness, darkness sliders
+    LashMapEditor.jsx     mm per zone, curl, thickness, fan type
+    Adjustments.jsx       colour, coloured tips, fullness, darkness, bottom lashes
     CompareAll.jsx        all styles side by side
   lib/
     faceLandmarker.js     MediaPipe setup and detection
-    eyeGeometry.js        eyelid curves and directions
+    eyeGeometry.js        eyelid curves, directions, mm scale from the iris
     lashRenderer.js       draws the lashes
-    lashStyles.js         style definitions
+    lashStyles.js         style definitions (lash maps in mm), colours
+    savedLooks.js         saved looks on the device
     eyeShape.js           eye shape and suggestions
 scripts/
   copy-mediapipe.mjs      prepares public/mediapipe for build:selfhost
@@ -94,7 +122,7 @@ scripts/
 
 - It is a preview, not a photo-real result. Very angled faces, closed eyes,
   heavy glasses or very small faces in the photo give weaker results.
-- Lower lashes are not drawn.
+- The mm scale assumes an average iris (11.7 mm); real irises vary by about ±0.5 mm.
 - Eye-shape suggestions are rules of thumb, tested on a handful of photos.
   Smiling narrows the eyes, so a neutral face gives the best reading.
 - Live camera speed depends on the device. On weak devices the lashes can lag

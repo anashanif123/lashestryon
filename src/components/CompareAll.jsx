@@ -1,5 +1,4 @@
-import { useEffect, useRef } from "react";
-import { LASH_STYLES } from "../lib/lashStyles.js";
+import { useEffect, useMemo, useRef } from "react";
 import { getEyes } from "../lib/eyeGeometry.js";
 import { drawLashes } from "../lib/lashRenderer.js";
 
@@ -8,7 +7,7 @@ function Tile({ photo, eyes, crop, style, adj, active, recommended, onPick }) {
   const ref = useRef(null);
   useEffect(() => {
     const out = ref.current;
-    const scale = Math.min(2, 520 / crop.w);
+    const scale = Math.min(2.5, 520 / crop.w);
     out.width = Math.round(crop.w * scale);
     out.height = Math.round(crop.h * scale);
     const ctx = out.getContext("2d");
@@ -28,27 +27,31 @@ function Tile({ photo, eyes, crop, style, adj, active, recommended, onPick }) {
   );
 }
 
-export default function CompareAll({ photo, landmarks, adj, activeId, recommended = [], onPick }) {
-  const eyes = getEyes(landmarks, photo.width, photo.height);
-  if (!eyes) return null;
-
-  // Crop around both eyes with room above for the lashes.
-  const pts = eyes.flatMap((e) => [...e.upper, ...e.lower]);
-  const minX = Math.min(...pts.map((p) => p.x));
-  const maxX = Math.max(...pts.map((p) => p.x));
-  const minY = Math.min(...pts.map((p) => p.y));
-  const maxY = Math.max(...pts.map((p) => p.y));
-  const ew = maxX - minX;
-  const crop = {
-    x: Math.max(0, minX - ew * 0.12),
-    y: Math.max(0, minY - ew * 0.3),
-    w: Math.min(photo.width, maxX + ew * 0.12) - Math.max(0, minX - ew * 0.12),
-    h: Math.min(photo.height, maxY + ew * 0.12) - Math.max(0, minY - ew * 0.3),
-  };
+export default function CompareAll({ styles, photo, landmarks, adj, activeId, recommended = [], onPick }) {
+  const eyes = useMemo(() => getEyes(landmarks, photo.width, photo.height), [landmarks, photo]);
+  const crop = useMemo(() => {
+    if (!eyes) return null;
+    // Crop around both eyes with room above for the lashes.
+    const pts = eyes.flatMap((e) => [...e.upper, ...e.lower]);
+    const minX = Math.min(...pts.map((p) => p.x));
+    const maxX = Math.max(...pts.map((p) => p.x));
+    const minY = Math.min(...pts.map((p) => p.y));
+    const maxY = Math.max(...pts.map((p) => p.y));
+    const ew = maxX - minX;
+    const x = Math.max(0, minX - ew * 0.12);
+    const y = Math.max(0, minY - ew * 0.32);
+    return {
+      x,
+      y,
+      w: Math.min(photo.width, maxX + ew * 0.12) - x,
+      h: Math.min(photo.height, maxY + ew * 0.14) - y,
+    };
+  }, [eyes, photo]);
+  if (!eyes || !crop) return null;
 
   return (
     <div className="compare-grid">
-      {LASH_STYLES.map((style) => (
+      {styles.map((style) => (
         <Tile
           key={style.id}
           photo={photo}

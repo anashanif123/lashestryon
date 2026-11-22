@@ -1,10 +1,34 @@
-// App settings. Change these to fit the salon you are demoing for.
+// App settings. Defaults below; each salon can override them in the link, e.g.
+//   https://your-site.vercel.app/?salon=Hi-Lash%20Lounge&book=https://acuity.../&accent=8c3b5e
+//   &styles=natural,cat-eye,volume&style=volume&embed=1
+//
+// salon   name shown in the header and on saved images
+// book    booking link for the "Book" button (the style is added as ?style=...)
+// accent  brand colour as a hex code without #
+// styles  only show these style ids (comma separated)
+// style   style selected at the start
+// embed   1 = compact header, for placing the page inside a salon's website (iframe)
 
-export const SALON_NAME = "Your Lash Studio";
+const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+const safeUrl = (value) => {
+  try {
+    const u = new URL(value);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.href : null;
+  } catch {
+    return null;
+  }
+};
+const hex = (value) => (/^[0-9a-f]{6}$/i.test(value || "") ? `#${value}` : null);
 
-// Where the "Book this style" button goes (Acuity, Fresha, your own site...).
-// The chosen style name is added to the link as ?style=<name>.
-export const BOOKING_URL = "https://example.com/book";
+export const SALON_NAME = (params.get("salon") || "").trim().slice(0, 60) || "Lash Try-On";
+export const BOOKING_URL = safeUrl(params.get("book") || "") || null; // no button when not set
+export const ACCENT = hex(params.get("accent"));
+export const ONLY_STYLES = (params.get("styles") || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+export const START_STYLE = params.get("style") || null;
+export const EMBED = params.get("embed") === "1";
 
 // MediaPipe files. The version must match "@mediapipe/tasks-vision" in package.json.
 export const MEDIAPIPE_VERSION = "0.10.21";
