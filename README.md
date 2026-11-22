@@ -1,4 +1,4 @@
-# Lash Try-On (demo)
+ # Lash Try-On (demo)
 
 Upload a photo or use the camera, and preview lash extension styles on your own eyes.
 Built with React + Vite and Google MediaPipe Face Landmarker. Everything runs in the
