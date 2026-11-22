@@ -53,6 +53,7 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 /* Keep the photo in view while the long settings panel scrolls (desktop). */
 @media (min-width: 901px) {
   .stage-col { position: sticky; top: 16px; }
+  .stage-col.is-grid { position: static; }
   .stage-canvas { max-height: calc(100vh - 300px); min-height: 280px; }
 }
 .panel h2 { font-family: var(--display); font-weight: 600; font-size: 22px; margin: 4px 0 0; }

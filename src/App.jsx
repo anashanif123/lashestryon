@@ -541,7 +541,7 @@ export default function App() {
       </header>
 
       <main className="layout">
-        <section className="stage-col">
+        <section className={`stage-col${showAll ? " is-grid" : ""}`}>
           {!showStage ? (
             <div
               className={`dropzone${dragOver ? " is-over" : ""}`}
