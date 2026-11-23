@@ -1,4 +1,5 @@
 import { CURLS, THICKNESSES, MIN_MM, MAX_MM, ZONES } from "../lib/lashStyles.js";
+import CurlIcon from "./CurlIcon.jsx";
 const FANS = [
   { value: 1, label: "Classic" },
   { value: 2, label: "2D" },
@@ -50,19 +51,29 @@ export default function LashMapEditor({ style, onChange, onReset, changed }) {
 
       <div className="field">
         <span className="field-label">Curl</span>
-        <div className="chip-row">
+        <div className="chip-row curl-row">
           {Object.entries(CURLS).map(([id, c]) => (
             <button
               key={id}
               type="button"
               title={c.note}
-              className={`chip${style.curl === id ? " is-active" : ""}`}
+              aria-pressed={style.curl === id}
+              className={`chip curl-chip${style.curl === id ? " is-active" : ""}`}
               onClick={() => onChange({ curl: id })}
             >
-              {c.label}
+              <CurlIcon curl={id} width={22} height={16} strokeWidth={1.8} />
+              <span>{c.label}</span>
             </button>
           ))}
         </div>
+        {CURLS[style.curl] && (
+          <p className="curl-note">
+            <strong>
+              {CURLS[style.curl].label} curl · about {CURLS[style.curl].angle}°
+            </strong>{" "}
+            {CURLS[style.curl].note}
+          </p>
+        )}
       </div>
 
       <div className="field">

@@ -14,11 +14,14 @@ browser: no API key, no server, and photos never leave the device.
   "Mapping guide" draws those points on the photo with their mm
 - **Real placement**: the inner corner is left largely alone, and the set carries on past
   the outer corner of the white of the eye, along the lid, and tapers there
-- **Real curl**: each lash leaves the lid and curls up along an arc, J to D
+- **Real curl shapes**: each curl is drawn from its own side profile (J ~30°, B ~45°,
+  C ~60°, CC ~65°, D ~72°, plus flat-base L and M lifting curls), in 3D, then seen from
+  the front. Straighter curls point at the camera and look shorter; stronger curls rise
+  and lift. The editor shows each curl's side view
 - **13 styles** drawn strand by strand: Natural, Cat Eye, Doll Eye, Open Eye, Squirrel,
   Fox Eye, Hybrid, Wispy, Volume, Mega Volume, Wet Look, Anime, Lash Lift
 - **Lash map editor** in the units lash artists use: 5 mapping points in mm,
-  curl J / B / C / CC / D, thickness 0.05–0.20 mm, Classic or 2D–8D fans
+  curl J / B / C / CC / D / L / M, thickness 0.05–0.20 mm, Classic or 2D–8D fans
 - **Spec card** under the photo, e.g. `8-9-10-12-13 mm · C curl · 0.15 mm · Classic`
 - Colours (black, dark brown, brown), **colour accents** (blue, purple, pink, red,
   green) as tips, mixed in, or full colour, and optional **bottom lashes**

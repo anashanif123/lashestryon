@@ -13,9 +13,12 @@
 // - Strands taper and fade to the tip, and are softened to match the photo.
 
 import { DEBUG_INDICES, LASH_START } from "./eyeGeometry.js";
-import { CURLS, LASH_COLORS, TIP_COLORS, lengthAt } from "./lashStyles.js";
+import { LASH_COLORS, TIP_COLORS, curlTurns, lengthAt } from "./lashStyles.js";
 
-const PROJECTION = 0.8; // how long a lash looks from the front, compared to its real length
+const PROJECTION = 0.8; // used for the mapping guide's line lengths (a C curl seen from the front)
+// A natural upper lash leaves the lid pointing forward (towards the camera) and a little
+// up. The extension follows it, then curls up by its curl angle.
+const BASE_ELEVATION = 0.42; // radians above "straight at the camera" (~24°)
 const VISUAL_WIDTH = 2.2; // a 0.15 mm lash reads wider than 0.15 mm in a photo (blur, shadow)
 
 // Same number in, same number out, so lashes don't flicker between camera frames.
@@ -73,6 +76,33 @@ function lashPath(root, dir, up, length, curl, steps = 12) {
     const d = turnTowards(start, up, curl * bend);
     const step = (length * speeds[i]) / total;
     p = { x: p.x + d.x * step, y: p.y + d.y * step };
+    pts.push(p);
+  }
+  return pts;
+}
+
+/**
+ * A curled lash in 3D, seen from the front.
+ * The lash starts pointing forward (at the camera) and slightly up, angled `yaw` towards
+ * `side` (outwards at the outer corner, towards the nose at the inner corner). Along its
+ * length it turns up by the curl's own profile (`turns`). Only the up and sideways parts
+ * show in a front-facing photo, which is what gives each curl its real shape: J lashes
+ * point at the camera and look short and straight, D lashes rise and look longer, and the
+ * outer lashes sweep out sideways and then lift.
+ */
+function lashPath3D(root, up, side, yaw, elevation, length, turns) {
+  const steps = turns.length;
+  const ds = length / steps;
+  const sy = Math.sin(yaw);
+  const pts = [root];
+  let p = root;
+  for (let i = 0; i < steps; i++) {
+    const phi = elevation + turns[i] - (turns[i] - (i ? turns[i - 1] : 0)) / 2;
+    // Past straight up, a tip curls back over itself; seen from the front it only stops
+    // moving sideways rather than hooking back.
+    const lateral = sy * Math.cos(Math.min(phi, Math.PI / 2 + 0.05));
+    const rise = Math.sin(phi);
+    p = { x: p.x + (side.x * lateral + up.x * rise) * ds, y: p.y + (side.y * lateral + up.y * rise) * ds };
     pts.push(p);
   }
   return pts;
@@ -148,9 +178,7 @@ function drawUpper(ctx, eye, eyeIndex, style, adj, pxScale, colors) {
   const up = eye.up;
   const o = eye.outerDir;
   const spacing = (eye.width * (tEnd - LASH_START)) / count;
-  const lift = CURLS[style.curl]?.lift ?? 0.8;
-  // How far the lash turns towards the brows along its length (radians-ish, 0…1 of the way).
-  const curlAmount = clamp(0.18 + lift * 0.42, 0.2, 0.72);
+  const turns = curlTurns(style.curl);
   const fanSize = Math.max(1, style.fan || 1);
   const fanEvery = style.fanEvery || 1;
   const spread = style.spread ?? 0.26;
@@ -170,12 +198,10 @@ function drawUpper(ctx, eye, eyeIndex, style, adj, pxScale, colors) {
     const innerTaper = 0.78 + 0.22 * smoothstep(anchors[0], anchors[0] + 0.07, t);
     // Past the outer corner the last lashes taper off along the lid.
     const outerTaper = 1 - 0.22 * smoothstep(1, tEnd, t);
-    let length = lengthAt(style.map, t, anchors) * mm * PROJECTION * innerTaper * outerTaper * closedFactor;
+    let length = lengthAt(style.map, t, anchors) * mm * innerTaper * outerTaper * closedFactor;
     length *= 1 + (r1 - 0.5) * style.jitter;
     const spike = style.spikes && i % style.spikes.every === 0 && t > anchors[1] * 0.9;
     if (spike) length *= style.spikes.boost;
-    // Keep tips below the brow: squeeze anything near the lid-to-brow gap.
-    if (length > maxLength * 0.8) length = maxLength * (0.8 + 0.2 * Math.tanh((length / maxLength - 0.8) / 0.2));
 
     // Start direction: between "straight off the lid" and "towards the brows".
     const n = sample.normal;
@@ -206,9 +232,22 @@ function drawUpper(ctx, eye, eyeIndex, style, adj, pxScale, colors) {
       const open = strands === 1 ? 0 : (s / (strands - 1) - 0.5) * spread;
       const angle = (sweep + open + (r2 - 0.5) * 0.2 + (r4 - 0.5) * 0.07) * sign;
       const d = rotate(d0, angle);
-      const L = length * (strands === 1 ? 1 : 0.86 + 0.14 * r4);
-      const curl = curlAmount * (0.88 + 0.24 * r4);
-      const pts = lashPath(root, d, up, L, curl);
+      let L = length * (strands === 1 ? 1 : 0.86 + 0.14 * r4);
+      // Fan direction in the photo → how far the lash points sideways in 3D.
+      const along = d.x * up.x + d.y * up.y;
+      const lat = { x: d.x - up.x * along, y: d.y - up.y * along };
+      const latLen = Math.hypot(lat.x, lat.y);
+      const side = latLen > 1e-6 ? { x: lat.x / latLen, y: lat.y / latLen } : { x: up.y, y: -up.x };
+      const yaw = clamp(Math.atan2(latLen, along) * 1.15, 0, 1.4);
+      const elevation = BASE_ELEVATION + (r4 - 0.5) * 0.12;
+      let pts = lashPath3D(root, up, side, yaw, elevation, L, turns);
+      // Keep tips below the brow: squeeze anything that would reach into the lid-to-brow gap.
+      const rise = Math.max(...pts.map((q) => (q.x - root.x) * up.x + (q.y - root.y) * up.y));
+      if (rise > maxLength * 0.8) {
+        const target = maxLength * (0.8 + 0.2 * Math.tanh((rise / maxLength - 0.8) / 0.2));
+        L *= target / rise;
+        pts = lashPath3D(root, up, side, yaw, elevation, L, turns);
+      }
       drawStrand(ctx, pts, width, alpha, colors, paintFor(colors, seed + s * 11));
     }
   });

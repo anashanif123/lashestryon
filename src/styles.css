@@ -292,3 +292,11 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 }
 .view-chips { gap: 4px; }
 .view-chips .chip { padding: 4px 12px; }
+
+/* Curl chips with a side view of each curl */
+.curl-row { gap: 6px; }
+.curl-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px 4px 8px; }
+.curl-chip .curl-icon { color: var(--accent); }
+.curl-chip.is-active .curl-icon { color: var(--accent-ink); }
+.curl-note { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.curl-note strong { color: var(--ink); font-weight: 700; }

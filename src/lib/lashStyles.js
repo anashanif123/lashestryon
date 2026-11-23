@@ -4,7 +4,7 @@
 //            inner corner, iris start, pupil, iris end, outer corner.
 //            The iris points are found on each client's own eye, so a "12 at the pupil"
 //            sits right above that client's pupil.
-// curl       J, B, C, CC or D (how strongly the lash lifts)
+// curl       J, B, C, CC, D, L or M (the shape of the lash, see CURLS)
 // thickness  extension diameter in millimetres (0.05 – 0.20)
 // fan        strands per root: 1 = classic, 2–8 = "2D"–"8D" volume fans
 // fanEvery   put a fan on every Nth root (2 = hybrid mix of classic + fans)
@@ -15,13 +15,45 @@
 //
 // Everything is drawn by code, strand by strand. No lash images are needed.
 
+// Curl shapes, as lash suppliers chart them: how far the lash turns from its base to its
+// tip (angle, degrees), how much of the base stays straight before it starts to bend,
+// and where along the lash the bend happens:
+//   arc   = an even curve along the lash (C, CC, D: like a naturally curled lash)
+//   tip   = the curl gathers towards the tip (J, B: straight base, curled tip)
+//   kink  = flat base, then an abrupt lift (L) or a softer, earlier one (M)
 export const CURLS = {
-  J: { label: "J", lift: 0.25, note: "Straight, very natural" },
-  B: { label: "B", lift: 0.5, note: "Soft curl" },
-  C: { label: "C", lift: 0.8, note: "Most popular, noticeable lift" },
-  CC: { label: "CC", lift: 1.0, note: "Strong curl" },
-  D: { label: "D", lift: 1.2, note: "Dramatic, doll-like" },
+  J: { label: "J", angle: 30, base: 0.3, bend: "tip", note: "Straight base, slight lift at the tip. Most natural" },
+  B: { label: "B", angle: 45, base: 0.25, bend: "tip", note: "Straight base, curled tip. A little more lift than J" },
+  C: { label: "C", angle: 60, base: 0.1, bend: "arc", note: "Even curve like a naturally curled lash. Most popular" },
+  CC: { label: "CC", angle: 65, base: 0.08, bend: "arc", note: "Between C and D. More lift than C" },
+  D: { label: "D", angle: 72, base: 0.06, bend: "arc", note: "Strong, dramatic curl that opens the eye" },
+  L: { label: "L", angle: 80, base: 0.42, bend: "kink", note: "Flat base, then a sharp lift. For hooded eyes and monolids" },
+  M: { label: "M", angle: 70, base: 0.28, bend: "kink-soft", note: "Like L with a shorter flat base and softer lift" },
 };
+
+/**
+ * How far the lash has turned (radians) at points along it, root (0) to tip (1).
+ * Used to draw the lashes on the photo and the curl previews, so they always match.
+ */
+export function curlTurns(curlId, steps = 14) {
+  const c = CURLS[curlId] ?? CURLS.C;
+  const total = (c.angle * Math.PI) / 180;
+  const weight = (s) => {
+    if (s < c.base) return 0;
+    const x = (s - c.base) / (1 - c.base);
+    if (c.bend === "tip") return Math.pow(x, 0.9) + 0.15;
+    if (c.bend === "kink") return Math.exp(-Math.pow((s - (c.base + 0.06)) / 0.06, 2));
+    if (c.bend === "kink-soft") return Math.exp(-Math.pow((s - (c.base + 0.1)) / 0.12, 2)) + 0.12;
+    return 1; // even arc
+  };
+  const w = [];
+  let sum = 0;
+  for (let i = 0; i < steps; i++) {
+    sum += weight((i + 0.5) / steps);
+    w.push(sum);
+  }
+  return w.map((v) => (sum ? (v / sum) * total : 0));
+}
 
 // Names of the 5 mapping points, inner corner → outer corner.
 export const ZONES = [
