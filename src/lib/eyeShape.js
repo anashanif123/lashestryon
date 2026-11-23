@@ -48,15 +48,16 @@ export function analyseEyes(landmarks, w, h) {
   const spacingLabel = innerGap < 1.02 ? "close-set" : innerGap > 1.34 ? "wide-set" : "balanced";
 
   // Score each style using common lash-artist guidance.
-  const score = { natural: 1, "cat-eye": 1, "doll-eye": 1, hybrid: 1, volume: 0.5, wispy: 0.8 };
+  const score = { natural: 1, "cat-eye": 1, "doll-eye": 1, "open-eye": 0.9, squirrel: 0.8, hybrid: 1, volume: 0.5, wispy: 0.8 };
   const add = (ids, v) => ids.forEach((id) => (score[id] += v));
-  if (shapeLabel === "round") add(["cat-eye", "wispy"], 2); // elongate round eyes
+  if (shapeLabel === "round") add(["cat-eye", "wispy", "squirrel"], 2); // elongate round eyes
   if (shapeLabel === "almond") add(["cat-eye", "natural", "hybrid"], 1.2); // almond suits most
-  if (tiltLabel === "downturned") add(["doll-eye", "natural"], 2.2); // lift the centre, avoid pulling down
+  if (tiltLabel === "downturned") add(["doll-eye", "open-eye", "natural"], 2.2); // lift the centre, avoid pulling down
+  if (tiltLabel === "downturned") add(["squirrel"], 1); // lifts at the iris end without dragging the corner
   if (tiltLabel === "downturned") add(["cat-eye"], -1.5);
   if (tiltLabel === "upturned") add(["doll-eye", "hybrid"], 1.5);
   if (spacingLabel === "close-set") add(["cat-eye"], 1.5); // weight to the outer corners
-  if (spacingLabel === "wide-set") add(["doll-eye", "volume"], 1.5);
+  if (spacingLabel === "wide-set") add(["doll-eye", "open-eye", "volume"], 1.5);
 
   const recommended = Object.entries(score)
     .sort((a, b) => b[1] - a[1])

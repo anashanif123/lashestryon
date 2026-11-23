@@ -1,6 +1,4 @@
-import { CURLS, THICKNESSES, MIN_MM, MAX_MM } from "../lib/lashStyles.js";
-
-const ZONES = ["Inner", "2", "Centre", "4", "Outer"];
+import { CURLS, THICKNESSES, MIN_MM, MAX_MM, ZONES } from "../lib/lashStyles.js";
 const FANS = [
   { value: 1, label: "Classic" },
   { value: 2, label: "2D" },
@@ -22,11 +20,11 @@ export default function LashMapEditor({ style, onChange, onReset, changed }) {
     <div className="mapper">
       <div className="map-bars" aria-label="Lash map">
         {style.map.map((mm, i) => (
-          <div className="map-zone" key={ZONES[i]}>
+          <div className={`map-zone map-zone-${ZONES[i].id}`} key={ZONES[i].id}>
             <button
               type="button"
               className="step"
-              aria-label={`Longer, zone ${ZONES[i]}`}
+              aria-label={`Longer at ${ZONES[i].label}`}
               onClick={() => setZone(i, 0.5)}
               disabled={mm >= MAX_MM}
             >
@@ -39,13 +37,13 @@ export default function LashMapEditor({ style, onChange, onReset, changed }) {
             <button
               type="button"
               className="step"
-              aria-label={`Shorter, zone ${ZONES[i]}`}
+              aria-label={`Shorter at ${ZONES[i].label}`}
               onClick={() => setZone(i, -0.5)}
               disabled={mm <= MIN_MM}
             >
               −
             </button>
-            <span className="zone-label">{ZONES[i]}</span>
+            <span className="zone-label">{ZONES[i].short}</span>
           </div>
         ))}
       </div>

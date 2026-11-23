@@ -1,4 +1,4 @@
-import { LASH_COLORS, TIP_COLORS } from "../lib/lashStyles.js";
+import { COLOR_MODES, LASH_COLORS, TIP_COLORS } from "../lib/lashStyles.js";
 
 // Colour, fullness, darkness and extras.
 export default function Adjustments({ value, onChange }) {
@@ -22,7 +22,7 @@ export default function Adjustments({ value, onChange }) {
         </div>
       </div>
       <div className="field">
-        <span className="field-label">Coloured tips</span>
+        <span className="field-label">Colour accent</span>
         <div className="swatch-row">
           {TIP_COLORS.map((c) => (
             <button
@@ -36,6 +36,20 @@ export default function Adjustments({ value, onChange }) {
             />
           ))}
         </div>
+        {value.tip !== "none" && (
+          <div className="chip-row" role="group" aria-label="How the colour is used">
+            {COLOR_MODES.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                className={`chip${(value.colorMode || "tips") === m.id ? " is-active" : ""}`}
+                onClick={() => set({ colorMode: m.id })}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <label className="slider" htmlFor="adj-density">

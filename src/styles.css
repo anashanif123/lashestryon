@@ -279,3 +279,16 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 }
 .topbar .ghost-btn { white-space: nowrap; }
 @media (max-width: 480px) { .topbar .ghost-btn { padding: 8px 14px; font-size: 14px; } .brand-name { font-size: 22px; } }
+
+/* Lash map points, coloured like the mapping guide on the photo */
+.zone-label { text-align: center; line-height: 1.2; min-height: 2.4em; }
+.map-zone-iris-start .zone-label, .map-zone-iris-end .zone-label { color: #db2777; font-weight: 700; }
+.map-zone-pupil .zone-label { color: #6d4fe0; font-weight: 700; }
+.map-zone-iris-start .bar, .map-zone-iris-end .bar { background: #ec4899; }
+.map-zone-pupil .bar { background: #7c5cff; }
+.inline-link {
+  background: none; border: none; padding: 0; font: inherit; color: var(--accent); font-weight: 700;
+  text-decoration: underline; cursor: pointer;
+}
+.view-chips { gap: 4px; }
+.view-chips .chip { padding: 4px 12px; }

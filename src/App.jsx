@@ -4,9 +4,9 @@ import Adjustments from "./components/Adjustments.jsx";
 import LashMapEditor from "./components/LashMapEditor.jsx";
 import CompareAll from "./components/CompareAll.jsx";
 import { analyseEyes } from "./lib/eyeShape.js";
-import { LASH_STYLES, DEFAULT_ADJUSTMENTS, LASH_COLORS, TIP_COLORS, specText } from "./lib/lashStyles.js";
+import { LASH_STYLES, DEFAULT_ADJUSTMENTS, LASH_COLORS, accentText, specText } from "./lib/lashStyles.js";
 import { getEyes } from "./lib/eyeGeometry.js";
-import { drawLashes, drawDebugPoints } from "./lib/lashRenderer.js";
+import { drawLashes, drawDebugPoints, drawMapGuide } from "./lib/lashRenderer.js";
 import { getLandmarker, detectImage, detectVideoFrame, setVideoMode } from "./lib/faceLandmarker.js";
 import { loadLooks, storeLooks } from "./lib/savedLooks.js";
 import { ACCENT, BOOKING_URL, EMBED, MAX_PHOTO_SIDE, ONLY_STYLES, SALON_NAME, START_STYLE } from "./config.js";
@@ -15,7 +15,7 @@ import { ACCENT, BOOKING_URL, EMBED, MAX_PHOTO_SIDE, ONLY_STYLES, SALON_NAME, ST
 
 // view = the part of the image shown on the canvas ({ x, y, w, h } in image pixels, plus scale).
 function drawScene(ctx, source, w, h, landmarks, opts, view = { x: 0, y: 0, w, h, scale: 1 }) {
-  const { style, adj, compare, split, showPoints, mirror } = opts;
+  const { style, adj, compare, split, showPoints, guide, mirror } = opts;
   const cw = ctx.canvas.width;
   const ch = ctx.canvas.height;
   const toView = () => ctx.setTransform(view.scale, 0, 0, view.scale, -view.x * view.scale, -view.y * view.scale);
@@ -48,6 +48,7 @@ function drawScene(ctx, source, w, h, landmarks, opts, view = { x: 0, y: 0, w, h
       ctx.scale(-1, 1);
     }
     drawLashes(ctx, eyes, style, adj);
+    if (guide) drawMapGuide(ctx, eyes, style);
     if (showPoints) drawDebugPoints(ctx, landmarks, w, h);
     ctx.restore();
   }
@@ -103,6 +104,30 @@ function faceView(landmarks, w, h) {
   return { x, y, w: vw, h: vh, scale };
 }
 
+// Close-up on both eyes and brows: the best view for judging lashes, especially on phones.
+const EYE_AREA = [33, 133, 159, 145, 263, 362, 386, 374, 70, 105, 107, 300, 334, 336, 7, 249];
+function eyesView(landmarks, w, h) {
+  const xs = EYE_AREA.map((i) => landmarks[i].x * w);
+  const ys = EYE_AREA.map((i) => landmarks[i].y * h);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const span = maxX - minX;
+  const x = Math.max(0, minX - span * 0.12);
+  const y = Math.max(0, minY - span * 0.1);
+  const vw = Math.min(w, maxX + span * 0.12) - x;
+  const vh = Math.min(h, maxY + span * 0.16) - y;
+  const scale = Math.min(4, Math.max(1, 1100 / vw));
+  return { x, y, w: vw, h: vh, scale };
+}
+
+const VIEWS = [
+  { id: "eyes", label: "Eyes" },
+  { id: "face", label: "Face" },
+  { id: "photo", label: "Whole photo" },
+];
+
 function loadImage(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -147,8 +172,7 @@ function exportCanvas(source, style, adj) {
   ctx.fillStyle = "#6b5562";
   ctx.font = `500 ${small}px Manrope, Arial, sans-serif`;
   const colour = LASH_COLORS.find((c) => c.id === adj.color)?.label ?? "Black";
-  const tip = TIP_COLORS.find((c) => c.id === adj.tip);
-  const extra = [colour, tip && tip.rgb ? `${tip.label} tips` : null, adj.lower ? "bottom lashes" : null]
+  const extra = [colour, accentText(adj), adj.lower ? "bottom lashes" : null]
     .filter(Boolean)
     .join(" · ");
   ctx.fillText(`${specText(style)} · ${extra}`, pad, source.height + pad + big * 1.25, w - pad * 2);
@@ -202,7 +226,9 @@ export default function App() {
   const [split, setSplit] = useState(0.5);
   const [showPoints, setShowPoints] = useState(false);
   const [showAll, setShowAll] = useState(false);
-  const [zoom, setZoom] = useState(true);
+  // Phones show the eyes close up by default; bigger screens show the face.
+  const [view, setView] = useState(() => (typeof window !== "undefined" && window.innerWidth < 700 ? "eyes" : "face"));
+  const [guide, setGuide] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [looks, setLooks] = useState(() => loadLooks());
   const [toast, setToast] = useState("");
@@ -265,7 +291,7 @@ export default function App() {
 
   // The camera loop reads the latest settings from here without restarting.
   const live = useRef({});
-  live.current = { style, adj, compare, split, showPoints };
+  live.current = { style, adj, compare, split, showPoints, guide };
 
   // ---------- camera ----------
 
@@ -415,22 +441,22 @@ export default function App() {
   useEffect(() => {
     if (mode !== "photo" || !photo || !canvasRef.current) return;
     const canvas = canvasRef.current;
-    const view =
-      zoom && landmarks
-        ? faceView(landmarks, photo.width, photo.height)
+    const area =
+      view !== "photo" && landmarks
+        ? (view === "eyes" ? eyesView : faceView)(landmarks, photo.width, photo.height)
         : { x: 0, y: 0, w: photo.width, h: photo.height, scale: 1 };
-    canvas.width = Math.round(view.w * view.scale);
-    canvas.height = Math.round(view.h * view.scale);
+    canvas.width = Math.round(area.w * area.scale);
+    canvas.height = Math.round(area.h * area.scale);
     drawScene(
       canvas.getContext("2d"),
       photo,
       photo.width,
       photo.height,
       landmarks,
-      { style, adj, compare, split, showPoints, mirror: false },
-      view
+      { style, adj, compare, split, showPoints, guide, mirror: false },
+      area
     );
-  }, [mode, photo, landmarks, style, adj, compare, split, showPoints, zoom, showAll]);
+  }, [mode, photo, landmarks, style, adj, compare, split, showPoints, guide, view, showAll]);
 
   // ---------- compare slider by dragging on the image ----------
 
@@ -521,7 +547,7 @@ export default function App() {
   const busy = status.type === "loading";
   const hasResult = (mode === "photo" && !!landmarks) || mode === "camera";
   const colourLabel = LASH_COLORS.find((c) => c.id === adj.color)?.label;
-  const tip = TIP_COLORS.find((c) => c.id === adj.tip);
+  const accent = accentText(adj);
 
   return (
     <div className={`app${EMBED ? " is-embed" : ""}`}>
@@ -630,7 +656,7 @@ export default function App() {
                 <div className="spec-line">{specText(style)}</div>
                 <div className="spec-line">
                   {colourLabel}
-                  {tip?.rgb ? ` · ${tip.label} tips` : ""}
+                  {accent ? ` · ${accent}` : ""}
                   {adj.lower ? " · Bottom lashes" : ""}
                 </div>
               </div>
@@ -685,11 +711,24 @@ export default function App() {
           {showStage && !showAll && (
             <div className="stage-tools stage-options">
               {mode === "photo" && landmarks && (
-                <label className="check" htmlFor="opt-zoom">
-                  <input id="opt-zoom" type="checkbox" checked={zoom} onChange={(e) => setZoom(e.target.checked)} />
-                  <span>Zoom to face</span>
-                </label>
+                <div className="chip-row view-chips" role="group" aria-label="View">
+                  {VIEWS.map((v) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      className={`chip${view === v.id ? " is-active" : ""}`}
+                      aria-pressed={view === v.id}
+                      onClick={() => setView(v.id)}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
               )}
+              <label className="check" htmlFor="opt-guide">
+                <input id="opt-guide" type="checkbox" checked={guide} onChange={(e) => setGuide(e.target.checked)} />
+                <span>Mapping guide</span>
+              </label>
               <label className="check" htmlFor="opt-compare">
                 <input
                   id="opt-compare"
@@ -778,7 +817,14 @@ export default function App() {
             <h2>
               <span className="step-no">2</span> Lash map
             </h2>
-            <p className="section-note">Lengths in millimetres, inner to outer corner, as your lash artist writes them.</p>
+            <p className="section-note">
+              Lengths in mm at the 5 points lash artists map: inner corner, where the iris starts, the pupil, where
+              the iris ends, and the outer corner. They are found on your own eye; turn on{" "}
+              <button type="button" className="inline-link" onClick={() => setGuide(true)}>
+                Mapping guide
+              </button>{" "}
+              to see them on the photo.
+            </p>
             <LashMapEditor
               style={style}
               changed={!!custom}

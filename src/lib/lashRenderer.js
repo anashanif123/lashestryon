@@ -4,14 +4,18 @@
 // - Lengths come from the style's lash map (mm) and the face's own scale (from the iris).
 // - In a front-facing photo lashes point partly towards the camera, so they look shorter
 //   than they are (PROJECTION).
-// - Lashes rise from the lid and curl up towards the brows, sweep outwards near the outer
-//   corner and stay short at the inner corner. No two strands are identical.
+// - Lengths follow the lash map at the client's own mapping points (inner corner, iris
+//   start, pupil, iris end, outer corner), found from the iris.
+// - The inner corner is left largely alone; the set carries on past the outer corner of
+//   the white of the eye, along the lid, and tapers there.
+// - Each lash leaves the lid and curls up towards the brows along an arc (J to D curl),
+//   sweeping outwards near the outer corner. No two strands are identical.
 // - Strands taper and fade to the tip, and are softened to match the photo.
 
-import { DEBUG_INDICES } from "./eyeGeometry.js";
+import { DEBUG_INDICES, LASH_START } from "./eyeGeometry.js";
 import { CURLS, LASH_COLORS, TIP_COLORS, lengthAt } from "./lashStyles.js";
 
-const PROJECTION = 0.75; // how long a lash looks from the front, compared to its real length
+const PROJECTION = 0.8; // how long a lash looks from the front, compared to its real length
 const VISUAL_WIDTH = 2.2; // a 0.15 mm lash reads wider than 0.15 mm in a photo (blur, shadow)
 
 // Same number in, same number out, so lashes don't flicker between camera frames.
@@ -33,32 +37,77 @@ const rotate = (v, a) => ({
   y: v.x * Math.sin(a) + v.y * Math.cos(a),
 });
 
-// One lash: a curved strand from root to tip that gets thinner and lighter.
-function drawStrand(ctx, root, control, tip, width, alpha, colors) {
-  const steps = 10;
+// Turn `v` part of the way (k = 0…1) towards `target`, along the shorter way round.
+function turnTowards(v, target, k) {
+  const a = Math.atan2(v.y, v.x);
+  let d = Math.atan2(target.y, target.x) - a;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  const b = a + d * k;
+  return { x: Math.cos(b), y: Math.sin(b) };
+}
+
+/**
+ * Centre line of one curled lash, root to tip.
+ * It leaves the lid a little more outwards than `dir`, then bends up towards `up`
+ * along a smooth arc: the more curl, the more it bends. Near the root the lash points
+ * partly at the camera, so that part looks shorter (foreshortening).
+ */
+function lashPath(root, dir, up, length, curl, steps = 12) {
+  const start = turnTowards(dir, up, -0.25 * curl);
+  const pts = [root];
+  let p = root;
+  // Visible speed along the lash: slower near the root (pointing at the camera).
+  const speeds = [];
+  let total = 0;
+  for (let i = 0; i < steps; i++) {
+    const s = (i + 0.5) / steps;
+    const v = 0.62 + 0.38 * Math.min(1, s * 1.6);
+    speeds.push(v);
+    total += v;
+  }
+  for (let i = 0; i < steps; i++) {
+    const s = (i + 0.5) / steps;
+    // The bend builds along the lash (the root stays straight where it is bonded).
+    const bend = Math.pow(Math.max(0, (s - 0.12) / 0.88), 1.15);
+    const d = turnTowards(start, up, curl * bend);
+    const step = (length * speeds[i]) / total;
+    p = { x: p.x + d.x * step, y: p.y + d.y * step };
+    pts.push(p);
+  }
+  return pts;
+}
+
+// One lash: a strand along `pts` that gets thinner and lighter towards the tip.
+// paint: "base" (plain), "tip" (accent at the tip), "full" (accent along the lash).
+function drawStrand(ctx, pts, width, alpha, colors, paint = "base") {
+  const n = pts.length - 1;
   const left = [];
   const right = [];
-  for (let i = 0; i <= steps; i++) {
-    const s = i / steps;
-    const a = (1 - s) * (1 - s);
-    const b = 2 * (1 - s) * s;
-    const c = s * s;
-    const px = a * root.x + b * control.x + c * tip.x;
-    const py = a * root.y + b * control.y + c * tip.y;
-    const dx = 2 * (1 - s) * (control.x - root.x) + 2 * s * (tip.x - control.x);
-    const dy = 2 * (1 - s) * (control.y - root.y) + 2 * s * (tip.y - control.y);
+  for (let i = 0; i <= n; i++) {
+    const a = pts[Math.max(0, i - 1)];
+    const b = pts[Math.min(n, i + 1)];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
     const dl = Math.hypot(dx, dy) || 1;
-    const half = (width / 2) * Math.pow(1 - s, 1.25) + 0.12;
-    left.push({ x: px - (dy / dl) * half, y: py + (dx / dl) * half });
-    right.push({ x: px + (dy / dl) * half, y: py - (dx / dl) * half });
+    const half = (width / 2) * Math.pow(1 - i / n, 1.2) + 0.12;
+    left.push({ x: pts[i].x - (dy / dl) * half, y: pts[i].y + (dx / dl) * half });
+    right.push({ x: pts[i].x + (dy / dl) * half, y: pts[i].y - (dx / dl) * half });
   }
+  const root = pts[0];
+  const tip = pts[n];
   const g = ctx.createLinearGradient(root.x, root.y, tip.x, tip.y);
   g.addColorStop(0, `rgba(${colors.base}, ${alpha})`);
-  if (colors.tip) {
-    // Coloured lashes are coloured along the outer half, so the colour shows on the photo.
+  if (paint === "tip" && colors.tip) {
+    // Coloured along the outer half, so the colour shows on the photo.
     g.addColorStop(0.42, `rgba(${colors.base}, ${alpha * 0.92})`);
     g.addColorStop(0.72, `rgba(${colors.tip}, ${alpha * 0.9})`);
     g.addColorStop(1, `rgba(${colors.tip}, ${alpha * 0.55})`);
+  } else if (paint === "full" && colors.tip) {
+    // A coloured extension on a dark natural lash: dark only right at the root.
+    g.addColorStop(0.18, `rgba(${colors.tip}, ${alpha * 0.85})`);
+    g.addColorStop(0.7, `rgba(${colors.tip}, ${alpha * 0.85})`);
+    g.addColorStop(1, `rgba(${colors.tip}, ${alpha * 0.45})`);
   } else {
     g.addColorStop(0.65, `rgba(${colors.base}, ${alpha * 0.85})`);
     g.addColorStop(1, `rgba(${colors.base}, ${alpha * 0.35})`);
@@ -72,24 +121,36 @@ function drawStrand(ctx, root, control, tip, width, alpha, colors) {
   ctx.fill();
 }
 
+// Which paint a strand gets for the chosen accent colour mode.
+function paintFor(colors, seed) {
+  if (!colors.tip) return "base";
+  if (colors.mode === "full") return "full";
+  if (colors.mode === "mix") return rand(seed * 1.37 + 5) < 0.5 ? "full" : "base";
+  return "tip";
+}
+
 function drawUpper(ctx, eye, eyeIndex, style, adj, pxScale, colors) {
   const mm = eye.pxPerMm;
   // Eye width in the PHOTO's own pixels. A small or low-quality face can't show fine
   // detail even when zoomed in, so we draw fewer, softer strands for it.
   const wImg = eye.width;
+  const anchors = eye.anchors;
+  const tEnd = 1 + eye.extT * 0.9;
 
   const maxByResolution = Math.max(14, Math.round(wImg * 0.9));
   const count = clamp(Math.round(style.count * adj.density), 10, maxByResolution);
   const lowRes = wImg < 70;
-  const samples = eye.sampleAt(count, 0.05, 0.985);
+  const samples = eye.sampleAt(count, LASH_START, tEnd);
 
   const closedFactor = 0.7 + 0.3 * eye.openness;
   const darkness = clamp(adj.darkness * (style.darkness ?? 1), 0.2, 1);
   const minWidth = Math.max(0.55 / pxScale, lowRes ? 0.5 : 0);
   const up = eye.up;
   const o = eye.outerDir;
-  const spacing = eye.width / count;
+  const spacing = (eye.width * (tEnd - LASH_START)) / count;
   const lift = CURLS[style.curl]?.lift ?? 0.8;
+  // How far the lash turns towards the brows along its length (radians-ish, 0…1 of the way).
+  const curlAmount = clamp(0.18 + lift * 0.42, 0.2, 0.72);
   const fanSize = Math.max(1, style.fan || 1);
   const fanEvery = style.fanEvery || 1;
   const spread = style.spread ?? 0.26;
@@ -104,11 +165,14 @@ function drawUpper(ctx, eye, eyeIndex, style, adj, pxScale, colors) {
     const r3 = rand(seed + 0.9);
     const t = sample.t;
 
-    // Length from the lash map, with the very inner corner tapering off.
-    const innerTaper = 0.55 + 0.45 * smoothstep(0, 0.18, t);
-    let length = lengthAt(style.map, t) * mm * PROJECTION * innerTaper * closedFactor;
+    // Inner corner: the set starts short and fine, and builds towards the iris.
+    const innerRamp = smoothstep(anchors[0], anchors[1], t);
+    const innerTaper = 0.78 + 0.22 * smoothstep(anchors[0], anchors[0] + 0.07, t);
+    // Past the outer corner the last lashes taper off along the lid.
+    const outerTaper = 1 - 0.22 * smoothstep(1, tEnd, t);
+    let length = lengthAt(style.map, t, anchors) * mm * PROJECTION * innerTaper * outerTaper * closedFactor;
     length *= 1 + (r1 - 0.5) * style.jitter;
-    const spike = style.spikes && i % style.spikes.every === 0;
+    const spike = style.spikes && i % style.spikes.every === 0 && t > anchors[1] * 0.9;
     if (spike) length *= style.spikes.boost;
     // Keep tips below the brow: squeeze anything near the lid-to-brow gap.
     if (length > maxLength * 0.8) length = maxLength * (0.8 + 0.2 * Math.tanh((length / maxLength - 0.8) / 0.2));
@@ -116,16 +180,19 @@ function drawUpper(ctx, eye, eyeIndex, style, adj, pxScale, colors) {
     // Start direction: between "straight off the lid" and "towards the brows".
     const n = sample.normal;
     const d0 = norm({ x: n.x * 0.7 + up.x * 0.3, y: n.y * 0.7 + up.y * 0.3 });
-    // Sweep outwards towards the outer corner; inner lashes lean slightly to the nose.
+    // Fan out from the pupil: lashes lean to the nose before it and sweep outwards after it,
+    // more so towards the outer corner and beyond it.
     const sign = d0.x * o.y - d0.y * o.x > 0 ? 1 : -1;
-    const sweep = (t - 0.45) * 0.5 + (style.lean || 0) * t;
+    const fromPupil = t - anchors[2];
+    const sweep = fromPupil * 0.55 + 0.15 * smoothstep(0.85, tEnd, t) + (style.lean || 0) * smoothstep(anchors[1], 1, t);
 
+    // Inner lashes are finer and fans smaller there.
     const fanHere = fanSize > 1 && i % fanEvery === 0 && !spike;
-    let strands = fanHere ? fanSize : 1;
+    let strands = fanHere ? Math.max(1, Math.round(fanSize * (0.5 + 0.5 * innerRamp))) : 1;
     if (lowRes) strands = Math.min(strands, 3);
-    const widthFactor = spike ? style.spikes.width ?? 1.5 : fanHere ? 0.85 : 1;
+    const widthFactor = (spike ? style.spikes.width ?? 1.5 : fanHere ? 0.85 : 1) * (0.7 + 0.3 * innerRamp);
     const width = Math.max(minWidth, style.thickness * VISUAL_WIDTH * mm * widthFactor);
-    const alpha = darkness * (strands > 1 ? strandAlpha(strands) : 0.92);
+    const alpha = darkness * (strands > 1 ? strandAlpha(strands) : 0.92) * (0.8 + 0.2 * innerRamp);
 
     // Roots spread a little along the lid, not on a perfect grid.
     const rootShift = (r3 - 0.5) * spacing * 0.6;
@@ -137,30 +204,24 @@ function drawUpper(ctx, eye, eyeIndex, style, adj, pxScale, colors) {
     for (let s = 0; s < strands; s++) {
       const r4 = rand(seed + s * 3.7 + 1);
       const open = strands === 1 ? 0 : (s / (strands - 1) - 0.5) * spread;
-      const angle = (sweep + open + (r2 - 0.5) * 0.12 + (r4 - 0.5) * 0.05) * sign;
+      const angle = (sweep + open + (r2 - 0.5) * 0.2 + (r4 - 0.5) * 0.07) * sign;
       const d = rotate(d0, angle);
       const L = length * (strands === 1 ? 1 : 0.86 + 0.14 * r4);
-      const curl = lift * (0.85 + 0.3 * r4);
-
-      // Rises along d, then bends up towards the brows (the curl).
-      const bend = norm({ x: d.x + up.x * 0.45 * curl, y: d.y + up.y * 0.45 * curl });
-      const control = { x: root.x + d.x * L * 0.5, y: root.y + d.y * L * 0.5 };
-      const tip = { x: control.x + bend.x * L * 0.5, y: control.y + bend.y * L * 0.5 };
-      drawStrand(ctx, root, control, tip, width, alpha, colors);
+      const curl = curlAmount * (0.88 + 0.24 * r4);
+      const pts = lashPath(root, d, up, L, curl);
+      drawStrand(ctx, pts, width, alpha, colors, paintFor(colors, seed + s * 11));
     }
   });
 
   // A thin lash band along the lid hides the roots, like real lash glue.
   if (adj.lashLine) {
-    const lid = eye.lid;
-    const start = Math.floor(lid.length * 0.06);
-    const end = Math.ceil(lid.length * 0.985);
+    const line = eye.sampleAt(40, LASH_START - 0.01, 1 + eye.extT * 0.35);
     ctx.save();
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.beginPath();
-    ctx.moveTo(lid[start].x, lid[start].y);
-    for (let i = start + 1; i < end; i++) ctx.lineTo(lid[i].x, lid[i].y);
+    ctx.moveTo(line[0].x, line[0].y);
+    for (let i = 1; i < line.length; i++) ctx.lineTo(line[i].x, line[i].y);
     ctx.strokeStyle = `rgba(${colors.base}, ${0.4 * darkness})`;
     ctx.lineWidth = Math.max(minWidth * 1.5, 0.45 * mm);
     ctx.stroke();
@@ -192,9 +253,8 @@ function drawLower(ctx, eye, eyeIndex, adj, pxScale, colors) {
     const sign = d0.x * o.y - d0.y * o.x > 0 ? 1 : -1;
     const d = rotate(d0, ((t - 0.35) * 0.6 + (r2 - 0.5) * 0.15) * sign);
     const root = { x: sample.x + n.x * mm * 0.1, y: sample.y + n.y * mm * 0.1 };
-    const control = { x: root.x + d.x * length * 0.5, y: root.y + d.y * length * 0.5 };
-    const tip = { x: root.x + d.x * length, y: root.y + d.y * length };
-    drawStrand(ctx, root, control, tip, Math.max(minWidth, 0.07 * VISUAL_WIDTH * mm), 0.62 * darkness, colors);
+    const pts = lashPath(root, d, down, length, 0.12, 6);
+    drawStrand(ctx, pts, Math.max(minWidth, 0.07 * VISUAL_WIDTH * mm), 0.62 * darkness, colors, "base");
   });
 }
 
@@ -216,6 +276,7 @@ export function drawLashes(ctx, eyes, style, adjustments) {
   const colors = {
     base: (LASH_COLORS.find((c) => c.id === adjustments.color) ?? LASH_COLORS[0]).rgb,
     tip: TIP_COLORS.find((c) => c.id === adjustments.tip)?.rgb ?? null,
+    mode: adjustments.colorMode || "tips",
   };
 
   const target = getLayer(ctx.canvas.width, ctx.canvas.height);
@@ -251,5 +312,55 @@ export function drawDebugPoints(ctx, landmarks, w, h) {
     ctx.arc(landmarks[i].x * w, landmarks[i].y * h, Math.max(2, w / 500), 0, Math.PI * 2);
     ctx.fill();
   }
+  ctx.restore();
+}
+
+/**
+ * Lash-mapping guide, like a lash artist's mapping sketch: a line at each mapping point
+ * (inner corner, iris start, pupil, iris end, outer corner) with its length in mm.
+ * The three iris points are numbered 1–3 in the order artists use (iris start, pupil, iris end).
+ */
+export function drawMapGuide(ctx, eyes, style) {
+  if (!eyes?.length) return;
+  const m = ctx.getTransform();
+  const pxScale = Math.hypot(m.a, m.b) || 1;
+  const px = (v) => v / pxScale; // canvas pixels → drawing units
+  const unit = Math.max(ctx.canvas.width, ctx.canvas.height) / 100;
+  const font = px(Math.max(11, unit * 1.5));
+  ctx.save();
+  eyes.forEach((eye) => {
+    const mm = eye.pxPerMm;
+    const pts = eye.sampleAt(5, 0, 1).map((_, i) => eye.sampleAt(1, eye.anchors[i], eye.anchors[i])[0]);
+    pts.forEach((p, i) => {
+      const iris = i >= 1 && i <= 3;
+      const len = lengthAt(style.map, eye.anchors[i], eye.anchors) * mm * PROJECTION;
+      const a = { x: p.x - eye.up.x * mm * 1.2, y: p.y - eye.up.y * mm * 1.2 };
+      const b = { x: p.x + eye.up.x * (len + mm * 1.5), y: p.y + eye.up.y * (len + mm * 1.5) };
+      ctx.strokeStyle = iris ? (i === 2 ? "rgba(124, 92, 255, 0.95)" : "rgba(236, 72, 153, 0.95)") : "rgba(255, 255, 255, 0.9)";
+      ctx.lineWidth = px(Math.max(1.5, unit * 0.18));
+      ctx.setLineDash(iris ? [] : [px(4), px(3)]);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      // Label: mm value in a small pill above the line.
+      const text = `${+style.map[i].toFixed(1)}`;
+      ctx.setLineDash([]);
+      ctx.font = `700 ${font}px Manrope, Arial, sans-serif`;
+      const tw = ctx.measureText(text).width;
+      const r = font * 0.75;
+      const cx = b.x + eye.up.x * r;
+      const cy = b.y + eye.up.y * r;
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(cx - tw / 2 - r * 0.6, cy - r, tw + r * 1.2, r * 2, r);
+      else ctx.rect(cx - tw / 2 - r * 0.6, cy - r, tw + r * 1.2, r * 2);
+      ctx.fill();
+      ctx.fillStyle = iris ? "#fff" : "#2a1a24";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, cx, cy + font * 0.04);
+    });
+  });
   ctx.restore();
 }

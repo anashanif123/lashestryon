@@ -1,6 +1,9 @@
 // Lash styles, described the way lash artists write them: a lash map.
 //
-// map        lengths in millimetres for 5 zones, inner corner → outer corner
+// map        lengths in millimetres at the 5 mapping points a lash artist uses:
+//            inner corner, iris start, pupil, iris end, outer corner.
+//            The iris points are found on each client's own eye, so a "12 at the pupil"
+//            sits right above that client's pupil.
 // curl       J, B, C, CC or D (how strongly the lash lifts)
 // thickness  extension diameter in millimetres (0.05 – 0.20)
 // fan        strands per root: 1 = classic, 2–8 = "2D"–"8D" volume fans
@@ -20,6 +23,15 @@ export const CURLS = {
   D: { label: "D", lift: 1.2, note: "Dramatic, doll-like" },
 };
 
+// Names of the 5 mapping points, inner corner → outer corner.
+export const ZONES = [
+  { id: "inner", label: "Inner corner", short: "Inner" },
+  { id: "iris-start", label: "Iris start", short: "Iris start" },
+  { id: "pupil", label: "Pupil", short: "Pupil" },
+  { id: "iris-end", label: "Iris end", short: "Iris end" },
+  { id: "outer", label: "Outer corner", short: "Outer" },
+];
+
 export const THICKNESSES = [0.05, 0.07, 0.1, 0.12, 0.15, 0.18, 0.2];
 export const MIN_MM = 5;
 export const MAX_MM = 16;
@@ -37,8 +49,8 @@ export const LASH_STYLES = [
     id: "natural",
     name: "Natural",
     category: "classic",
-    blurb: "Soft classic set, one extension per lash",
-    map: [8, 9, 10, 11, 10],
+    blurb: "Builds gently to just past the iris, soft classic set",
+    map: [7, 9, 10, 11, 10],
     curl: "C",
     thickness: 0.15,
     fan: 1,
@@ -63,8 +75,8 @@ export const LASH_STYLES = [
     id: "doll-eye",
     name: "Doll Eye",
     category: "classic",
-    blurb: "Longest in the centre to open up the eye",
-    map: [9, 11, 12, 11, 9],
+    blurb: "Longest at the pupil, shorter either side of the iris",
+    map: [8, 10, 12, 10, 9],
     curl: "CC",
     thickness: 0.15,
     fan: 1,
@@ -73,11 +85,24 @@ export const LASH_STYLES = [
     jitter: 0.16,
   },
   {
+    id: "open-eye",
+    name: "Open Eye",
+    category: "classic",
+    blurb: "Lifts the middle of the eye, softer than doll",
+    map: [7, 9, 11, 10, 8],
+    curl: "C",
+    thickness: 0.15,
+    fan: 1,
+    count: 66,
+    lean: -0.04,
+    jitter: 0.16,
+  },
+  {
     id: "squirrel",
     name: "Squirrel",
     category: "classic",
-    blurb: "Peaks just past the middle, then softens",
-    map: [8, 9, 11, 13, 10],
+    blurb: "Short to the iris, peaks where the iris ends, then tapers",
+    map: [7, 8, 10, 12, 10],
     curl: "C",
     thickness: 0.15,
     fan: 1,
@@ -103,7 +128,7 @@ export const LASH_STYLES = [
     name: "Hybrid",
     category: "hybrid",
     blurb: "Classic lashes mixed with light fans",
-    map: [8, 9, 10, 11, 11],
+    map: [7, 9, 10, 11, 11],
     curl: "C",
     thickness: 0.1,
     fan: 3,
@@ -118,7 +143,7 @@ export const LASH_STYLES = [
     name: "Wispy",
     category: "hybrid",
     blurb: "Textured fans with longer spikes",
-    map: [8, 9, 10, 11, 11],
+    map: [7, 9, 10, 11, 11],
     curl: "C",
     thickness: 0.07,
     fan: 3,
@@ -133,7 +158,7 @@ export const LASH_STYLES = [
     name: "Volume",
     category: "volume",
     blurb: "Full, soft fans for a dark lash line",
-    map: [9, 10, 11, 12, 11],
+    map: [8, 10, 11, 12, 11],
     curl: "CC",
     thickness: 0.07,
     fan: 5,
@@ -147,7 +172,7 @@ export const LASH_STYLES = [
     name: "Mega Volume",
     category: "volume",
     blurb: "Dense, ultra-dark fans for maximum drama",
-    map: [10, 11, 12, 13, 12],
+    map: [9, 11, 12, 13, 12],
     curl: "D",
     thickness: 0.05,
     fan: 8,
@@ -161,7 +186,7 @@ export const LASH_STYLES = [
     name: "Wet Look",
     category: "special",
     blurb: "Closed fans that look like glossy spikes",
-    map: [8, 9, 10, 11, 11],
+    map: [7, 9, 10, 11, 11],
     curl: "CC",
     thickness: 0.07,
     fan: 4,
@@ -175,7 +200,7 @@ export const LASH_STYLES = [
     name: "Anime",
     category: "special",
     blurb: "Defined spikes with soft lashes between",
-    map: [9, 10, 11, 12, 12],
+    map: [8, 10, 11, 12, 12],
     curl: "D",
     thickness: 0.05,
     fan: 2,
@@ -190,7 +215,7 @@ export const LASH_STYLES = [
     name: "Lash Lift",
     category: "special",
     blurb: "Your own lashes, lifted and tinted",
-    map: [6, 7, 8, 8.5, 7.5],
+    map: [5, 7, 8, 8.5, 7.5],
     curl: "D",
     thickness: 0.1,
     fan: 1,
@@ -216,28 +241,49 @@ export const TIP_COLORS = [
   { id: "green", label: "Green", rgb: "26, 150, 96" },
 ];
 
+// How an accent colour is used: on the tips, mixed in with the base colour, or all over.
+export const COLOR_MODES = [
+  { id: "tips", label: "Tips" },
+  { id: "mix", label: "Mixed" },
+  { id: "full", label: "Full" },
+];
+
 export const DEFAULT_ADJUSTMENTS = {
   density: 1,
   darkness: 0.9,
   color: "black",
   tip: "none",
+  colorMode: "tips",
   lower: false,
   lashLine: true,
 };
 
-/** Length (mm) at a point along the lid, t from 0 (inner) to 1 (outer). */
-export function lengthAt(map, t) {
-  const centers = [0.1, 0.3, 0.5, 0.7, 0.9];
-  if (t <= centers[0]) return map[0];
-  if (t >= centers[4]) return map[4];
+/**
+ * Length (mm) at a point along the lid.
+ * t: 0 = inner corner of the eye, 1 = outer corner (past 1 = the lid beyond the corner).
+ * anchors: where the 5 mapping points sit along the lid on this eye.
+ */
+export function lengthAt(map, t, anchors = [0.15, 0.33, 0.5, 0.69, 1]) {
+  if (t <= anchors[0]) return map[0];
+  if (t >= anchors[4]) return map[4];
   for (let i = 0; i < 4; i++) {
-    if (t <= centers[i + 1]) {
-      const f = (t - centers[i]) / (centers[i + 1] - centers[i]);
-      const s = f * f * (3 - 2 * f); // smooth blend between zones
+    if (t <= anchors[i + 1]) {
+      const f = (t - anchors[i]) / (anchors[i + 1] - anchors[i] || 1);
+      // Half straight, half eased: lengths step up evenly like a real map, with soft peaks.
+      const s = 0.5 * f + 0.5 * f * f * (3 - 2 * f);
       return map[i] + (map[i + 1] - map[i]) * s;
     }
   }
   return map[4];
+}
+
+/** Label for the accent colour, e.g. "Blue tips", "Blue mix", "Blue lashes". */
+export function accentText(adj) {
+  const tip = TIP_COLORS.find((c) => c.id === adj.tip);
+  if (!tip?.rgb) return null;
+  if (adj.colorMode === "mix") return `${tip.label} mix`;
+  if (adj.colorMode === "full") return `${tip.label} lashes`;
+  return `${tip.label} tips`;
 }
 
 /** Short text a client can show their lash artist. */

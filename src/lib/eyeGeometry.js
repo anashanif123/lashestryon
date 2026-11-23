@@ -8,6 +8,16 @@ export const IRIS_DIAMETER_MM = 11.7;
 // Fallback when the iris isn't found: average eye opening width.
 const EYE_WIDTH_MM = 28;
 
+// Where the lash set starts, as a fraction of the upper lid from the inner corner.
+// Lash artists leave the inner corner largely alone, so the set starts a little way in.
+export const LASH_START = 0.15;
+// The lash line carries on past the outer corner of the white of the eye (the lid
+// continues there), by about this fraction of the eye width.
+const OUTER_EXTENSION = 0.1;
+// Lash map points when the iris can't be measured (e.g. drawn thumbnails):
+// inner corner, iris start, pupil, iris end, outer corner.
+export const DEFAULT_ANCHORS = [LASH_START, 0.33, 0.5, 0.69, 1];
+
 // Lids listed from the INNER corner to the OUTER corner.
 const EYES = {
   // The eye on the left side of the image (the person's right eye).
@@ -15,14 +25,18 @@ const EYES = {
     upper: [133, 173, 157, 158, 159, 160, 161, 246, 33],
     lower: [133, 155, 154, 153, 145, 144, 163, 7, 33],
     browLower: [55, 65, 52, 53, 46],
+    browUpper: [70, 63, 105, 66, 107],
     iris: [469, 470, 471, 472], // right, top, left, bottom edge of the iris
+    irisCenter: 468,
   },
   // The eye on the right side of the image (the person's left eye).
   imageRight: {
     upper: [362, 398, 384, 385, 386, 387, 388, 466, 263],
     lower: [362, 382, 381, 380, 374, 373, 390, 249, 263],
     browLower: [285, 295, 282, 283, 276],
+    browUpper: [300, 293, 334, 296, 336],
     iris: [474, 475, 476, 477],
+    irisCenter: 473,
   },
 };
 
@@ -76,16 +90,22 @@ function catmullRom(points, stepsPerSegment = 24) {
   return out;
 }
 
-// Pick `count` points evenly spaced along the curve, between fractions t0 and t1 of its length.
-function resample(dense, count, t0, t1) {
+// Cumulative length along a polyline.
+function cumulative(points) {
   const cum = [0];
-  for (let i = 1; i < dense.length; i++) cum.push(cum[i - 1] + len(sub(dense[i], dense[i - 1])));
+  for (let i = 1; i < points.length; i++) cum.push(cum[i - 1] + len(sub(points[i], points[i - 1])));
+  return cum;
+}
+
+// Pick `count` points evenly spaced along the curve, from t0 to t1, where t is measured
+// as a fraction of `unit` (the lid's own length). t > 1 runs on into the extension.
+function resample(dense, cum, unit, count, t0, t1) {
   const total = cum[cum.length - 1] || 1;
   const out = [];
   let j = 1;
   for (let k = 0; k < count; k++) {
     const t = count === 1 ? (t0 + t1) / 2 : t0 + ((t1 - t0) * k) / (count - 1);
-    const target = t * total;
+    const target = Math.min(t * unit, total);
     while (j < cum.length - 1 && cum[j] < target) j++;
     const a = dense[j - 1];
     const b = dense[j];
@@ -113,6 +133,24 @@ export function buildEyeFromPoints(upper, lower) {
   const lid = catmullRom(upper);
   const lowerLid = catmullRom(lower);
 
+  // "Up" for this eye (towards the brow). getEyes() replaces it with the face's own up.
+  let up = { x: -outerDir.y, y: outerDir.x };
+  if (dot(up, sub(upper[4], center)) < 0) up = mul(up, -1);
+
+  // Carry the lash line on past the outer corner: the lid continues beyond the white of
+  // the eye, and so do the lashes. Heads outwards, between the lid's own direction at the
+  // corner and the line across the eye, rising very slightly.
+  const endTangent = norm(sub(lid[lid.length - 1], lid[lid.length - 4]));
+  const extDir = norm(add(add(mul(endTangent, 0.4), mul(outerDir, 0.6)), mul(up, 0.08)));
+  const extLen = width * OUTER_EXTENSION;
+  const lidExt = [...lid];
+  for (let i = 1; i <= 8; i++) lidExt.push(add(outer, mul(extDir, (extLen * i) / 8)));
+  const lidCum = cumulative(lidExt);
+  const lidLength = lidCum[lid.length - 1];
+  const extT = extLen / lidLength; // the extension, in lid-length units
+  const lowerCum = cumulative(lowerLid);
+  const lowerLength = lowerCum[lowerCum.length - 1];
+
   // Direction that points away from the eye (up for the upper lid, down for the lower lid).
   const awayFromEye = (p, tangent) => {
     let n = { x: -tangent.y, y: tangent.x };
@@ -120,14 +158,26 @@ export function buildEyeFromPoints(upper, lower) {
     return n;
   };
 
-  const sampleAt = (count, t0 = 0.03, t1 = 0.99) =>
-    resample(lid, count, t0, t1).map((s) => ({ ...s, normal: awayFromEye(s, s.tangent) }));
+  const sampleAt = (count, t0 = LASH_START, t1 = 1 + extT) =>
+    resample(lidExt, lidCum, lidLength, count, t0, t1).map((s) => ({ ...s, normal: awayFromEye(s, s.tangent) }));
   const sampleLowerAt = (count, t0 = 0.12, t1 = 0.96) =>
-    resample(lowerLid, count, t0, t1).map((s) => ({ ...s, normal: awayFromEye(s, s.tangent) }));
+    resample(lowerLid, lowerCum, lowerLength, count, t0, t1).map((s) => ({ ...s, normal: awayFromEye(s, s.tangent) }));
 
-  // "Up" for this eye (towards the brow). getEyes() replaces it with the face's own up.
-  let up = { x: -outerDir.y, y: outerDir.x };
-  if (dot(up, sub(upper[4], center)) < 0) up = mul(up, -1);
+  // t along the lid (fraction of its length) where the lid is above a point that is
+  // `u` of the way across the eye (0 = inner corner, 1 = outer corner).
+  const tAcross = (u) => {
+    const target = u * width;
+    let prev = 0;
+    for (let i = 1; i < lid.length; i++) {
+      const d = dot(sub(lid[i], inner), outerDir);
+      if (d >= target) {
+        const f = (target - prev) / (d - prev || 1);
+        return (lidCum[i - 1] + (lidCum[i] - lidCum[i - 1]) * Math.min(Math.max(f, 0), 1)) / lidLength;
+      }
+      prev = d;
+    }
+    return 1;
+  };
 
   return {
     inner,
@@ -137,15 +187,21 @@ export function buildEyeFromPoints(upper, lower) {
     outerDir,
     openness,
     lid,
+    lidExt,
     lowerLid,
+    extT,
     sampleAt,
     sampleLowerAt,
+    tAcross,
     upper,
     lower,
     up,
     browGap: Infinity,
     pxPerMm: width / EYE_WIDTH_MM,
     scaleSource: "eye-width",
+    // Lash map points along the lid: inner corner, iris start, pupil, iris end, outer corner.
+    anchors: DEFAULT_ANCHORS,
+    anchorSource: "default",
   };
 }
 
@@ -177,6 +233,27 @@ export function getEyes(landmarks, w, h) {
         e.scaleSource = "iris";
       });
     }
+  }
+
+  // Lash mapping points from the iris, the way lash artists map: where the iris starts,
+  // where the pupil is, and where the iris ends.
+  if (landmarks.length >= 478) {
+    defs.forEach((def, k) => {
+      const eye = eyes[k];
+      const [c] = toPx(landmarks, [def.irisCenter], w, h);
+      const [r, , l] = toPx(landmarks, def.iris, w, h);
+      // Across-the-eye position of the pupil. Kept near the middle in case the person
+      // is looking sideways: mapping is done for eyes looking straight ahead.
+      const uc = Math.min(Math.max(dot(sub(c, eye.inner), eye.outerDir) / eye.width, 0.4), 0.62);
+      const measured = Math.abs(dot(sub(r, l), eye.outerDir)) / 2;
+      const fromScale = (IRIS_DIAMETER_MM / 2) * eye.pxPerMm;
+      const radius = (measured > fromScale * 0.7 && measured < fromScale * 1.3 ? measured : fromScale) / eye.width;
+      const uIn = Math.max(uc - radius, LASH_START + 0.08);
+      const uOut = Math.min(uc + radius, 0.86);
+      eye.anchors = [LASH_START, eye.tAcross(uIn), eye.tAcross(uc), eye.tAcross(uOut), 1];
+      eye.anchorSource = "iris";
+      eye.irisRadiusPx = radius * eye.width;
+    });
   }
 
   // Face "up": perpendicular to the line between the two eyes, pointing to the brows.
