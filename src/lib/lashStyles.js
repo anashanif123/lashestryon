@@ -55,6 +55,45 @@ export function curlTurns(curlId, steps = 14) {
   return w.map((v) => (sum ? (v / sum) * total : 0));
 }
 
+// Safe pairings of thickness and lash type, the way lash artists work: the more lashes in
+// a fan, the finer each one has to be, or the fan is too heavy for the natural lash.
+//   Classic (one extension per natural lash): 0.10 – 0.20 mm
+//   Volume fans: 0.05 up to 8D, 0.07 up to 5D, 0.10 up to 3D. Thicker lashes are never fanned.
+export const FAN_TYPES = [
+  { value: 1, label: "Classic" },
+  { value: 2, label: "2D" },
+  { value: 3, label: "3D" },
+  { value: 4, label: "4D" },
+  { value: 5, label: "5D" },
+  { value: 6, label: "6D" },
+  { value: 8, label: "8D" },
+];
+const MAX_FAN = { 0.05: 8, 0.07: 5, 0.1: 3 };
+const CLASSIC_MIN = 0.1;
+
+/** Thicknesses that are safe for a lash type (1 = classic, 2+ = fan size). */
+export function thicknessesFor(fan = 1) {
+  if (fan <= 1) return THICKNESSES.filter((t) => t >= CLASSIC_MIN - 1e-9);
+  return THICKNESSES.filter((t) => (MAX_FAN[t] ?? 0) >= fan);
+}
+
+export function isSafeCombo(thickness, fan = 1) {
+  return thicknessesFor(fan).some((t) => Math.abs(t - thickness) < 1e-9);
+}
+
+/** The closest safe thickness for a lash type, keeping the current one when it is safe. */
+export function safeThickness(thickness, fan = 1) {
+  const ok = thicknessesFor(fan);
+  if (ok.some((t) => Math.abs(t - thickness) < 1e-9)) return thickness;
+  return ok.reduce((best, t) => (Math.abs(t - thickness) < Math.abs(best - thickness) ? t : best), ok[0]);
+}
+
+/** A style with its thickness made safe for its lash type. */
+export function safeStyle(style) {
+  const thickness = safeThickness(style.thickness, style.fan || 1);
+  return thickness === style.thickness ? style : { ...style, thickness };
+}
+
 // Names of the 5 mapping points, inner corner → outer corner.
 export const ZONES = [
   { id: "inner", label: "Inner corner", short: "Inner" },

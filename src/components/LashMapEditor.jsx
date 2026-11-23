@@ -1,17 +1,9 @@
-import { CURLS, THICKNESSES, MIN_MM, MAX_MM, ZONES } from "../lib/lashStyles.js";
+import { CURLS, FAN_TYPES, MIN_MM, MAX_MM, ZONES, safeThickness, thicknessesFor } from "../lib/lashStyles.js";
 import CurlIcon from "./CurlIcon.jsx";
-const FANS = [
-  { value: 1, label: "Classic" },
-  { value: 2, label: "2D" },
-  { value: 3, label: "3D" },
-  { value: 4, label: "4D" },
-  { value: 5, label: "5D" },
-  { value: 6, label: "6D" },
-  { value: 8, label: "8D" },
-];
 
 // The lash map, in the units lash artists use: mm per zone, curl, thickness, fan size.
 export default function LashMapEditor({ style, onChange, onReset, changed }) {
+  const fan = style.fan || 1;
   const setZone = (i, delta) => {
     const map = style.map.map((v, j) => (j === i ? Math.min(MAX_MM, Math.max(MIN_MM, +(v + delta).toFixed(1))) : v));
     onChange({ map });
@@ -77,33 +69,19 @@ export default function LashMapEditor({ style, onChange, onReset, changed }) {
       </div>
 
       <div className="field">
-        <span className="field-label">Thickness (mm)</span>
-        <div className="chip-row">
-          {THICKNESSES.map((t) => (
-            <button
-              key={t}
-              type="button"
-              className={`chip${style.thickness === t ? " is-active" : ""}`}
-              onClick={() => onChange({ thickness: t })}
-            >
-              {t.toFixed(2)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="field">
         <span className="field-label">Type</span>
         <div className="chip-row">
-          {FANS.map((f) => (
+          {FAN_TYPES.map((f) => (
             <button
               key={f.value}
               type="button"
-              className={`chip${(style.fan || 1) === f.value ? " is-active" : ""}`}
+              aria-pressed={fan === f.value}
+              className={`chip${fan === f.value ? " is-active" : ""}`}
               onClick={() =>
                 onChange({
                   fan: f.value,
-                  // classic → hybrid/volume needs a fan spread; volume → classic drops spikes
+                  // Keep the thickness safe for the new type (finer lashes for bigger fans).
+                  thickness: safeThickness(style.thickness, f.value),
                   spread: style.spread ?? 0.26,
                   fanEvery: f.value === 1 ? 1 : style.fanEvery || 1,
                 })
@@ -113,6 +91,30 @@ export default function LashMapEditor({ style, onChange, onReset, changed }) {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="field">
+        <span className="field-label">Thickness (mm)</span>
+        <div className="chip-row thickness-row">
+          {thicknessesFor(fan).map((t) => (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={style.thickness === t}
+              className={`chip${style.thickness === t ? " is-active" : ""}`}
+              onClick={() => onChange({ thickness: t })}
+            >
+              {t.toFixed(2)}
+            </button>
+          ))}
+        </div>
+        <p className="curl-note">
+          {fan === 1
+            ? "Classic lashes use 0.10–0.20 mm."
+            : `${fan}D fans use ${thicknessesFor(fan)
+                .map((t) => t.toFixed(2))
+                .join(", ")} mm. Finer lashes allow bigger fans: 0.05 up to 8D, 0.07 up to 5D, 0.10 up to 3D.`}
+        </p>
       </div>
 
       {changed && (

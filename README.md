@@ -21,7 +21,11 @@ browser: no API key, no server, and photos never leave the device.
 - **13 styles** drawn strand by strand: Natural, Cat Eye, Doll Eye, Open Eye, Squirrel,
   Fox Eye, Hybrid, Wispy, Volume, Mega Volume, Wet Look, Anime, Lash Lift
 - **Lash map editor** in the units lash artists use: 5 mapping points in mm,
-  curl J / B / C / CC / D / L / M, thickness 0.05–0.20 mm, Classic or 2D–8D fans
+  curl J / B / C / CC / D / L / M, Classic or 2D–8D fans, and thickness
+- **Only safe thickness and fan pairs** (from lash-artist practice): Classic 0.10–0.20 mm;
+  volume 0.05 up to 8D, 0.07 up to 5D, 0.10 up to 3D. Unsafe options are not offered,
+  changing the type moves the thickness to the nearest safe one, and older saved looks
+  are corrected when opened
 - **Spec card** under the photo, e.g. `8-9-10-12-13 mm · C curl · 0.15 mm · Classic`
 - Colours (black, dark brown, brown), **colour accents** (blue, purple, pink, red,
   green) as tips, mixed in, or full colour, and optional **bottom lashes**

@@ -4,7 +4,7 @@ import Adjustments from "./components/Adjustments.jsx";
 import LashMapEditor from "./components/LashMapEditor.jsx";
 import CompareAll from "./components/CompareAll.jsx";
 import { analyseEyes } from "./lib/eyeShape.js";
-import { LASH_STYLES, DEFAULT_ADJUSTMENTS, LASH_COLORS, accentText, specText } from "./lib/lashStyles.js";
+import { LASH_STYLES, DEFAULT_ADJUSTMENTS, LASH_COLORS, accentText, safeStyle, specText } from "./lib/lashStyles.js";
 import { getEyes } from "./lib/eyeGeometry.js";
 import { drawLashes, drawDebugPoints, drawMapGuide } from "./lib/lashRenderer.js";
 import { getLandmarker, detectImage, detectVideoFrame, setVideoMode } from "./lib/faceLandmarker.js";
@@ -244,13 +244,15 @@ export default function App() {
   const toastTimer = useRef(0);
 
   const baseStyle = styles.find((s) => s.id === styleId) ?? styles[0];
+  // safeStyle keeps thickness and fan size a safe pair (also for looks saved earlier).
   const style = useMemo(
-    () => ({
-      ...baseStyle,
-      ...(custom || {}),
-      baseName: baseStyle.name,
-      name: custom ? `${baseStyle.name} (custom)` : baseStyle.name,
-    }),
+    () =>
+      safeStyle({
+        ...baseStyle,
+        ...(custom || {}),
+        baseName: baseStyle.name,
+        name: custom ? `${baseStyle.name} (custom)` : baseStyle.name,
+      }),
     [baseStyle, custom]
   );
 
@@ -848,10 +850,10 @@ export default function App() {
               <h2>Saved looks</h2>
               <ul className="looks">
                 {looks.map((look) => {
-                  const lookStyle = {
+                  const lookStyle = safeStyle({
                     ...(LASH_STYLES.find((s) => s.id === look.styleId) ?? LASH_STYLES[0]),
                     ...(look.custom || {}),
-                  };
+                  });
                   return (
                     <li key={look.id} className="look">
                       <button type="button" className="look-main" onClick={() => applyLook(look)}>
