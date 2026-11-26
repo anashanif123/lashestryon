@@ -9,7 +9,7 @@ import { getEyes } from "./lib/eyeGeometry.js";
 import { drawLashes, drawDebugPoints, drawMapGuide } from "./lib/lashRenderer.js";
 import { getLandmarker, detectImage, detectVideoFrame, setVideoMode } from "./lib/faceLandmarker.js";
 import { loadLooks, storeLooks } from "./lib/savedLooks.js";
-import { ACCENT, BOOKING_URL, EMBED, MAX_PHOTO_SIDE, ONLY_STYLES, SALON_NAME, START_STYLE } from "./config.js";
+import { ACCENT, BOOKING_URL, DEMO, DEMO_CONTACT, EMBED, MAX_PHOTO_SIDE, ONLY_STYLES, SALON_NAME, START_STYLE } from "./config.js";
 
 // ---------- drawing helpers ----------
 
@@ -553,6 +553,12 @@ export default function App() {
 
   return (
     <div className={`app${EMBED ? " is-embed" : ""}`}>
+      {DEMO && (
+        <div className="demo-banner" role="note">
+          Sample try-on made for {SALON_NAME}. Want it on your website or Instagram?{" "}
+          <a href={`mailto:${DEMO_CONTACT}?subject=${encodeURIComponent(`Lash try-on for ${SALON_NAME}`)}`}>Get in touch</a>
+        </div>
+      )}
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true" />

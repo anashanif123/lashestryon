@@ -29,6 +29,10 @@ export const ONLY_STYLES = (params.get("styles") || "")
   .filter(Boolean);
 export const START_STYLE = params.get("style") || null;
 export const EMBED = params.get("embed") === "1";
+// demo=1 shows a small banner saying this page is a sample made for the salon (used in outreach).
+export const DEMO = params.get("demo") === "1";
+// Contact for the demo banner.
+export const DEMO_CONTACT = "anashanifdev@gmail.com";
 
 // MediaPipe files. The version must match "@mediapipe/tasks-vision" in package.json.
 export const MEDIAPIPE_VERSION = "0.10.21";
